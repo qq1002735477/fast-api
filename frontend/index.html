@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>短链接服务测试</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        h1 { text-align: center; color: #333; margin-bottom: 20px; }
+        .card { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .card h2 { color: #666; margin-bottom: 15px; font-size: 18px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; color: #555; font-weight: 500; }
+        input, textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+        input:focus, textarea:focus { outline: none; border-color: #4a90d9; }
+        button { background: #4a90d9; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px; margin-right: 10px; margin-bottom: 10px; }
+        button:hover { background: #357abd; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        .btn-danger { background: #dc3545; }
+        .btn-danger:hover { background: #c82333; }
+        .btn-success { background: #28a745; }
+        .btn-success:hover { background: #218838; }
+        .status { padding: 10px; border-radius: 4px; margin-bottom: 15px; }
+        .status.logged-in { background: #d4edda; color: #155724; }
+        .status.logged-out { background: #f8d7da; color: #721c24; }
+        .result { background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 4px; padding: 15px; margin-top: 15px; white-space: pre-wrap; word-break: break-all; font-family: monospace; font-size: 13px; max-height: 300px; overflow-y: auto; }
+        .link-item { background: #fff; border: 1px solid #e9ecef; border-radius: 4px; padding: 15px; margin-bottom: 10px; }
+        .link-item .short-url { color: #4a90d9; font-weight: bold; cursor: pointer; }
+        .link-item .short-url:hover { text-decoration: underline; }
+        .link-item .original-url { color: #666; font-size: 13px; word-break: break-all; }
+        .link-item .stats { color: #888; font-size: 12px; margin-top: 5px; }
+        .tabs { display: flex; border-bottom: 2px solid #e9ecef; margin-bottom: 20px; }
+        .tab { padding: 10px 20px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; }
+        .tab.active { border-bottom-color: #4a90d9; color: #4a90d9; font-weight: bold; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔗 短链接服务测试</h1>
+        
+        <!-- 登录状态 -->
+        <div id="loginStatus" class="status logged-out">
+            未登录 - 请先登录或注册
+        </div>
+
+        <!-- 标签页 -->
+        <div class="tabs">
+            <div class="tab active" data-tab="auth">登录/注册</div>
+            <div class="tab" data-tab="links">短链接管理</div>
+            <div class="tab" data-tab="create">创建短链接</div>
+        </div>
+
+        <!-- 登录/注册 -->
+        <div id="auth" class="tab-content active">
+            <div class="card">
+                <h2>用户登录</h2>
+                <div class="form-group">
+                    <label>用户名</label>
+                    <input type="text" id="loginUsername" placeholder="输入用户名">
+                </div>
+                <div class="form-group">
+                    <label>密码</label>
+                    <input type="password" id="loginPassword" placeholder="输入密码">
+                </div>
+                <button onclick="login()">登录</button>
+                <button onclick="logout()" class="btn-danger">退出登录</button>
+            </div>
+
+            <div class="card">
+                <h2>用户注册</h2>
+                <div class="form-group">
+                    <label>用户名</label>
+                    <input type="text" id="regUsername" placeholder="输入用户名">
+                </div>
+                <div class="form-group">
+                    <label>邮箱</label>
+                    <input type="email" id="regEmail" placeholder="输入邮箱">
+                </div>
+                <div class="form-group">
+                    <label>密码</label>
+                    <input type="password" id="regPassword" placeholder="输入密码（至少8位）">
+                </div>
+                <div class="form-group">
+                    <label>确认密码</label>
+                    <input type="password" id="regPasswordConfirm" placeholder="再次输入密码">
+                </div>
+                <button onclick="register()" class="btn-success">注册</button>
+            </div>
+            <div id="authResult" class="result hidden"></div>
+        </div>
+
+        <!-- 短链接管理 -->
+        <div id="links" class="tab-content">
+            <div class="card">
+                <h2>我的短链接</h2>
+                <button onclick="getMyLinks()">刷新列表</button>
+                <div id="linksList"></div>
+            </div>
+            <div id="linksResult" class="result hidden"></div>
+        </div>
+
+        <!-- 创建短链接 -->
+        <div id="create" class="tab-content">
+            <div class="card">
+                <h2>创建新短链接</h2>
+                <div class="form-group">
+                    <label>原始链接 *</label>
+                    <input type="url" id="originalUrl" placeholder="https://example.com/very/long/url">
+                </div>
+                <div class="form-group">
+                    <label>自定义短码（可选）</label>
+                    <input type="text" id="customCode" placeholder="留空则自动生成">
+                </div>
+                <button onclick="createLink()" class="btn-success">创建短链接</button>
+            </div>
+            <div id="createResult" class="result hidden"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://127.0.0.1:8000';
+        let accessToken = localStorage.getItem('accessToken') || '';
+        let refreshToken = localStorage.getItem('refreshToken') || '';
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            updateLoginStatus();
+            setupTabs();
+        });
+
+        // 标签页切换
+        function setupTabs() {
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                    tab.classList.add('active');
+                    document.getElementById(tab.dataset.tab).classList.add('active');
+                });
+            });
+        }
+
+        // 更新登录状态
+        function updateLoginStatus() {
+            const statusEl = document.getElementById('loginStatus');
+            if (accessToken) {
+                statusEl.className = 'status logged-in';
+                statusEl.textContent = '✅ 已登录';
+            } else {
+                statusEl.className = 'status logged-out';
+                statusEl.textContent = '❌ 未登录 - 请先登录或注册';
+            }
+        }
+
+        // 显示结果
+        function showResult(elementId, data, isError = false) {
+            const el = document.getElementById(elementId);
+            el.classList.remove('hidden');
+            el.style.background = isError ? '#f8d7da' : '#d4edda';
+            el.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+        }
+
+        // API 请求
+        async function apiRequest(endpoint, method = 'GET', body = null, needAuth = true) {
+            const headers = { 'Content-Type': 'application/json' };
+            if (needAuth && accessToken) {
+                headers['Authorization'] = `Bearer ${accessToken}`;
+            }
+            
+            const options = { method, headers };
+            if (body) options.body = JSON.stringify(body);
+            
+            const response = await fetch(`${API_BASE}${endpoint}`, options);
+            const data = await response.json().catch(() => ({}));
+            
+            if (!response.ok) {
+                throw { status: response.status, ...data };
+            }
+            return data;
+        }
+
+        // 登录
+        async function login() {
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+            
+            if (!username || !password) {
+                showResult('authResult', '请输入用户名和密码', true);
+                return;
+            }
+            
+            try {
+                const data = await apiRequest('/api/auth/login/', 'POST', { username, password }, false);
+                // 支持两种返回格式：tokens.access 或直接 access
+                accessToken = data.tokens?.access || data.access;
+                refreshToken = data.tokens?.refresh || data.refresh;
+                localStorage.setItem('accessToken', accessToken);
+                localStorage.setItem('refreshToken', refreshToken);
+                updateLoginStatus();
+                showResult('authResult', '登录成功！\n' + JSON.stringify(data, null, 2));
+            } catch (err) {
+                showResult('authResult', '登录失败：' + JSON.stringify(err, null, 2), true);
+            }
+        }
+
+        // 注册
+        async function register() {
+            const username = document.getElementById('regUsername').value;
+            const email = document.getElementById('regEmail').value;
+            const password = document.getElementById('regPassword').value;
+            const passwordConfirm = document.getElementById('regPasswordConfirm').value;
+            
+            if (!username || !email || !password || !passwordConfirm) {
+                showResult('authResult', '请填写所有字段', true);
+                return;
+            }
+            
+            if (password !== passwordConfirm) {
+                showResult('authResult', '两次输入的密码不一致', true);
+                return;
+            }
+            
+            try {
+                const data = await apiRequest('/api/auth/register/', 'POST', { 
+                    username, 
+                    email, 
+                    password,
+                    password_confirm: passwordConfirm
+                }, false);
+                // 支持两种返回格式：tokens.access 或直接 access
+                accessToken = data.tokens?.access || data.access;
+                refreshToken = data.tokens?.refresh || data.refresh;
+                localStorage.setItem('accessToken', accessToken);
+                localStorage.setItem('refreshToken', refreshToken);
+                updateLoginStatus();
+                showResult('authResult', '注册成功！\n' + JSON.stringify(data, null, 2));
+            } catch (err) {
+                showResult('authResult', '注册失败：' + JSON.stringify(err, null, 2), true);
+            }
+        }
+
+        // 退出登录
+        function logout() {
+            accessToken = '';
+            refreshToken = '';
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
+            updateLoginStatus();
+            showResult('authResult', '已退出登录');
+        }
+
+        // 获取我的短链接
+        async function getMyLinks() {
+            if (!accessToken) {
+                showResult('linksResult', '请先登录', true);
+                return;
+            }
+            
+            try {
+                const data = await apiRequest('/api/links/');
+                const listEl = document.getElementById('linksList');
+                
+                if (data.results && data.results.length > 0) {
+                    listEl.innerHTML = data.results.map(link => `
+                        <div class="link-item">
+                            <div class="short-url" onclick="window.open('${API_BASE}/r/${link.short_code}', '_blank')">
+                                ${API_BASE}/r/${link.short_code}
+                            </div>
+                            <div class="original-url">${link.original_url}</div>
+                            <div class="stats">点击: ${link.click_count} | 创建: ${new Date(link.created_at).toLocaleString()}</div>
+                            <button onclick="deleteLink('${link.short_code}')" class="btn-danger" style="margin-top:10px;font-size:12px;padding:5px 10px;">删除</button>
+                        </div>
+                    `).join('');
+                } else {
+                    listEl.innerHTML = '<p style="color:#888;padding:20px;">暂无短链接，去创建一个吧！</p>';
+                }
+                showResult('linksResult', data);
+            } catch (err) {
+                showResult('linksResult', '获取失败：' + JSON.stringify(err, null, 2), true);
+            }
+        }
+
+        // 创建短链接
+        async function createLink() {
+            if (!accessToken) {
+                showResult('createResult', '请先登录', true);
+                return;
+            }
+            
+            const originalUrl = document.getElementById('originalUrl').value;
+            const customCode = document.getElementById('customCode').value;
+            
+            if (!originalUrl) {
+                showResult('createResult', '请输入原始链接', true);
+                return;
+            }
+            
+            try {
+                const body = { original_url: originalUrl };
+                if (customCode) body.custom_code = customCode;
+                
+                const data = await apiRequest('/api/links/', 'POST', body);
+                showResult('createResult', '创建成功！\n短链接: ' + API_BASE + '/r/' + data.short_code + '\n\n' + JSON.stringify(data, null, 2));
+                document.getElementById('originalUrl').value = '';
+                document.getElementById('customCode').value = '';
+            } catch (err) {
+                showResult('createResult', '创建失败：' + JSON.stringify(err, null, 2), true);
+            }
+        }
+
+        // 删除短链接
+        async function deleteLink(shortCode) {
+            if (!confirm('确定要删除这个短链接吗？')) return;
+            
+            try {
+                await apiRequest(`/api/links/${shortCode}/`, 'DELETE');
+                getMyLinks();
+            } catch (err) {
+                alert('删除失败：' + JSON.stringify(err));
+            }
+        }
+    </script>
+</body>
+</html>
